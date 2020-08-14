@@ -1,6 +1,6 @@
 {
   "name": "cataclysm",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Static Website Builder",
   "main": "api.mjs",
   "bin": {
