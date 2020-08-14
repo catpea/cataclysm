@@ -17,11 +17,9 @@ Handlebars.registerHelper('last', function(argument, body) {
   return body.fn(last(argument));;
 })
 
-
-
 export default main;
 
-function main(options){
+function main(data){
 
   console.log(options);
 

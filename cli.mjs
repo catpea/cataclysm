@@ -7,6 +7,6 @@ const options = {
 };
 
 const options = (await import(path.join(process.cwd(), 'cataclysm.mjs'))).default();
-const data = (await import(path.join(process.cwd(), 'data/index.mjs'))).default();
+const data = (await import(path.join(process.cwd(), 'src/data/index.mjs'))).default();
 
-api(options);
+api( Object.assign({}, options, data) );

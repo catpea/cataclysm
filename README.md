@@ -26,12 +26,17 @@ Template data file is ./data/index.mjs the data folder allows for extra files su
 
 Both are to return a promise.
 
-## Data
+### Configuration
 
-The first and foremost is data. There must be some way of fetching a properly structured data that is fed into the template system.
-Much like configuration.ext I introduce the concept of data.mjs, it is a JavaScript module that return a function, that upon execution will return all the data the template need.
+System configuration file is called ```./cataclysm.mjs```
 
-Please create a data.mjs module in the root of your project.
+### Data
+
+There must be some way of fetching a properly structured data that is fed into the template system.
+
+I introduce the concept of ```./src/data/index.mjs```, it is a JavaScript module that returns a promise, upon execution it will return all the data the templates need.
+
+Please create a ```./src/data/index.mjs``` module in the root of your project.
 
 ```JavaScript
 
