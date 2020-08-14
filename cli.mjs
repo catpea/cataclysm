@@ -1,6 +1,6 @@
 #!/usr/bin/env -S node --experimental-modules --trace-warnings
 
-import api from './api.js';
+import api from './api.mjs';
 
 const options = {
 
