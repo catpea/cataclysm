@@ -7,7 +7,7 @@
     "cataclysm": "cli.mjs"
   },
   "scripts": {
-    "save": "git add .; git commit -m 'New Release'; git push; npm version patch; npm publish;",
+    "save": "git add .; git commit -m 'New Release'; git push; npm version patch; npm publish; git push;",
     "test": "test.mjs"
   },
   "repository": {

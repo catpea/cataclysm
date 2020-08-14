@@ -1,5 +1,3 @@
-#!/usr/bin/env -S node --experimental-modules --trace-warnings
-
 import {inspect} from 'util';
 import fs from 'fs-extra';
 import path from 'path';
