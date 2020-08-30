@@ -33,6 +33,7 @@ async function main(){
   const data = await (await import(path.join(process.cwd(), 'src/data/index.mjs'))).default();
 
   const setup = Object.assign({
+    id: 'cataclysm',
     locations: {},
     options: Object.assign({}, defaults, options),
     data: data,

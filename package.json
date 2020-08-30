@@ -24,6 +24,7 @@
     "@nodelib/fs.walk": "^1.2.4",
     "cheerio": "^1.0.0-rc.3",
     "clean-stack": "^3.0.0",
+    "es6-template-strings": "^2.0.1",
     "fs-extra": "^9.0.1",
     "handlebars": "^4.7.6",
     "humanize": "0.0.9",
