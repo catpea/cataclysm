@@ -1,6 +1,10 @@
 # cataclysm
 Static Website Builder
 
+## YSK
+
+- Cataclysm uses ./src directory (rather than scattering files around repository root) to keep all your hard work in one directory.
+
 ## Links
 
 - [cataclysm at npm](https://www.npmjs.com/package/cataclysm)

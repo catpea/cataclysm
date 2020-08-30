@@ -23,8 +23,10 @@
   "dependencies": {
     "@nodelib/fs.walk": "^1.2.4",
     "cheerio": "^1.0.0-rc.3",
+    "clean-stack": "^3.0.0",
     "fs-extra": "^9.0.1",
     "handlebars": "^4.7.6",
+    "humanize": "0.0.9",
     "lodash": "^4.17.20",
     "posthtml": "^0.13.2",
     "posthtml-custom-elements": "^1.1.2",

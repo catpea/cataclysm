@@ -1,9 +1,26 @@
 #!/usr/bin/env -S node --experimental-modules --trace-warnings
 
+import {inspect} from 'util';
+
 import path from 'path';
 import yargs from 'yargs';
 import kebab from 'lodash/kebabCase.js';
 import api from './api.mjs';
+import html from './api/index.mjs';
+
+import cleanStack from 'clean-stack';
+
+process.on('unhandledRejection', (reason, promise) => {
+
+    //console.log('Reason: ' + reason);
+
+    console.log(inspect(reason));
+
+    if(reason.stack) console.log("cleanStack: ",cleanStack(reason.stack));
+    if(promise.stack) console.log("cleanStack: ",cleanStack(promise.stack));
+
+    process.exit(1);
+});
 
 async function main(){
 
@@ -52,7 +69,12 @@ async function main(){
         .map(str=>console.log(str))
       }
   }else{
-    await api(setup);
+    if(setup.options.mode == "html"){
+      await html(setup);
+    } else {
+      await api(setup);
+    }
+
   }
 
 }
