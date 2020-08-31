@@ -4,25 +4,14 @@ import path from 'path';
 import pretty from 'pretty';
 import cheerio from 'cheerio';
 import humanize from 'humanize';
-
 import camelCase from 'lodash/camelCase.js';
 import at from 'lodash/at.js';
-
-import template from 'es6-template-strings';
-
 import flatten from 'lodash/flatten.js';
 import fsWalk from '@nodelib/fs.walk';
 
 export default main;
 
 async function main(setup, files){
-
-
-  console.log(
-    interpolate('A more complex answer to the Ultimate Question of Life, the Universe, and Everything is still: ${human.answer}',{human:{answer:['Love', 'Wisdom', 'Funnyness', 'Aardvark', 'Hugs'].map(word=>word.charCodeAt(0)).reduce((a,i)=>a^i)/2}})
-  );
-
-  return;
 
   const db = database(setup, files);
 
@@ -50,16 +39,6 @@ async function main(setup, files){
 
 }
 
-function address($, root){
-  const response = $(root)
-  .parents()
-
-  .map(function(i, el) {
-    return this.name + $(this).attr('class');
-  }).get().reverse().concat(root.name).join(' -> ');
-
-  return response;
-}
 
 
 
@@ -170,14 +149,21 @@ function dereference(object={}, path=""){
   return location;
 }
 
-function interpolate2(text, context){
-  let result = text;
-  try{result = template(text, context)}catch(e){}
-  return result;
-}
-//.map(i=>i.match(/^[0-9]+$/)?parseInt(i):i)
+function address($, root){
+  const response = $(root)
+  .parents()
 
-function interpolate(t, c){return t.replace(/\${([^}]+)}/g,(m,p)=>p.split('.').reduce((a,f)=>a?a[f]:undefined,c)||m);}
+  .map(function(i, el) {
+    return this.name + $(this).attr('class');
+  }).get().reverse().concat(root.name).join(' -> ');
+
+  return response;
+}
+
+
+function interpolate(t, c){
+  return t.replace(/\${([^}]+)}/g,(m,p)=>p.split('.').reduce((a,f)=>a?a[f]:undefined,c)||m);
+}
 
 
 
