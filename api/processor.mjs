@@ -150,13 +150,18 @@ function dereference(object={}, path=""){
 }
 
 function address($, root){
+  const id = function(node){
+    let response = node.name;
+    if($(node).attr('class')){
+        response += "." + $(node).attr('class').split(' ').join(".");
+    }
+    return response;
+  }
   const response = $(root)
   .parents()
-
   .map(function(i, el) {
-    return this.name + $(this).attr('class');
-  }).get().reverse().concat(root.name).join(' -> ');
-
+    return id(this);
+  }).get().reverse().concat(id(root)).join(' -> ');
   return response;
 }
 
