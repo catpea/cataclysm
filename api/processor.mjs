@@ -14,97 +14,79 @@ export default main;
 async function main(setup, files){
 
   const db = database(setup, files);
-
   for(let page of db.pages){
-
     const $ = cheerio.load(page.content);
-
     const instance = {template:{}, context:setup, db, $};
-
     // This should happen once, because templates are stripped off asap, to be used later on.
     templator(instance);
-
     traverse($('html'), instance);
-
     page.html = pretty($.html());
-
     // page.html = interpolate(page.html, setup); // final interpolation pass, at this point all the newly created stuff had things interpolated by their creators.
-
     console.log(page.html);
-
   }
-
-  //console.log(`HTML (${db.pages.length}): ${db.pages.map(i=>`${i.name} (${humanize.filesize(i.html.length)})`)}`);
-
-
+  console.log(`HTML (${db.pages.length}): ${db.pages.map(i=>`${i.name} (${humanize.filesize(i.html.length)})`)}`);
 }
 
-
-
-
 function traverse(root, {template, context, page, db, $}){
-
-  console.log(`Address: ${address($, root)}`);
-
+  // $(root).addClass('traversed');
   $(root)
   .contents() // Gets the branches of each branch in the set of matched branchs, including text and comment nodes.
   .filter((index, branch) => branch.nodeType == 1) // select standard nodes only
   .each(function (index, branch) {
-
     if($(branch).attr('if')){
-
       const path = $(branch).attr('if');
       const dereferenced = dereference(context, path);
-
       $(branch).attr('if', null); // remove the spent attribute
       $(branch).attr('if-result', !!dereferenced); // remove the spent attribute
-
-      $(branch).before(`<!-- ${address($, branch)}: if path ${path} returned "${dereferenced}" (keys were ${Object.keys(context).join(", ")}) -->`);
+      $(branch).before(`<!-- ${address($, branch)}: if path "${path}" returned "${dereferenced}" (keys were ${Object.keys(context).join(", ")}) -->`);
       if(dereferenced === undefined){
         $(branch).remove(); // remove the entire node as it failed the logic test
         // nothing to traverse, the node is gone now
       }else{
         // traverse prior to interpolation
-
         traverse(branch, {template, context, page, db, $});
-
         const html = $.html(branch) + '\n'; // get string for interpolation
         const interpolated = interpolate(html, context);
         const $new = cheerio.load(interpolated);
         $(branch).replaceWith($new.html());
       }
-
     }else if($(branch).attr('each')){
-      // const path = $(branch).attr('each');
-      // $(branch).attr('each', null);
-      // const html = $.html(branch) + '\n';
-      // let index = 0;
-      // for(let item of dereferenced){
-      //   const context = Object.assign({}, context, item, index);
-      //   const interpolated = interpolate(html, context);
-      //   const $new = cheerio.load(interpolated);
-      //   traverse(branch, {template, context, page, db, $:$new});
-      //   $(branch).before($new.html());
-      //   index++;
-      // }
-      // $(branch).remove();
-
+      const path = $(branch).attr('each');
+      $(branch).attr('each', null);
+      const html = $.html(branch) + '\n';
+      let index = 0;
+      const dereferenced = dereference(context, path);
+      for(let item of dereferenced){
+        const newContext = Object.assign({}, context, item, {index});
+        const interpolated = interpolate(html, newContext);
+        const $new = cheerio.load(interpolated);
+        traverse($new.root(), {template, context:newContext, page, db, $:$new});
+        $(branch).before($new.html());
+        index++;
+      }
+      $(branch).remove();
     }else if( Object.keys(template).includes(branch.name) ){
       const name = branch.name;
-
-      $(branch).after(`<!-- template ${name} is mounted here here -->`);
-      $(branch).remove()
+      const html = template[name];
+      const content = $.html(branch);
+      const interpolated = interpolate(html, context);
+      const $new = cheerio.load(interpolated);
+      $(branch).before(`<!-- template ${name} is mounted here here -->`);
+      $new('slot[name]').each(function (index, templateSlot) {
+        const slotName = $(templateSlot).attr('name');
+        const $content = cheerio.load(content);
+        const selection = $content(`*[slot='${slotName}']`);
+        $(selection).attr('slot', null)
+        $new(templateSlot).replaceWith( selection )
+      });
+      traverse($new.root(), {template, context, page, db, $:$new}); // once slots have been done traverse the shadow root
+      $(branch).replaceWith($new.html()); // and add the shadowroot back
 
     }else{
       traverse(branch, {template, context, page, db, $});
     }
-
-
   })
-
 }
-
-
 
 function database(setup, files){
 
@@ -165,133 +147,15 @@ function address($, root){
   return response;
 }
 
-
 function interpolate(t, c){
-  return t.replace(/\${([^}]+)}/g,(m,p)=>p.split('.').reduce((a,f)=>a?a[f]:undefined,c)||m);
+  return t.replace(/\${([^}]+)}/g,(m,p)=>p.split('.').reduce((a,f)=>a?a[f]:undefined,c)??m)
 }
 
+function interpolateHtml($, node, context){
+  const html = $.html(node);
+  const interpolated = interpolate(html, context);
 
+  const $new = cheerio.load(interpolated);
+  $(node).replaceWith($new.html());
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// function ifStatements({setup, db, $, instance}){
-//   // Locate all if statements.
-//   $('*[if]')
-//   .filter(o=>!$(this).parent().is("*[each]"))
-//   .filter(o=>!$(this).parent().is(Object.keys(instance.template).join(", ")))
-//   // TODO: add not for every template type logged in instance, we don't want to execute if statements there
-//   .each(function(i, branch) {
-//
-//     const path = $(branch).attr('if');
-//     const dereferenced = !!at(setup, path).pop(); // seems to always return an empty array so pop is safe
-//
-//     // $(branch).before(`<!-- if evaluated ${path} to ${dereferenced} (keys were ${Object.keys(setup).join(", ")}) -->`)
-//
-//
-//     if( $(branch).attr('debug') ){
-//       console.log('>>>>>>>>>>>>>', $(branch).html() );
-//       console.log('>>>>>>>>>>>>>', Object.keys(setup).join(", ") );
-//     }
-//
-//     if(dereferenced){
-//       // everything is fine, remove the if
-//       $(branch).attr('if', null);
-//
-//       const $2 = $;
-//       const setup2 =  setup;
-//
-//         ifStatements({setup:setup2, db, $:$2, instance});
-//         eachStatements({setup:setup2, db, $:$2, instance});
-//         templateInterpolation({setup:setup2, db, $:$2, instance});
-//         helperExecution({setup:setup2, db, $:$2, instance});
-//
-//
-//
-//     }else{
-//       // nope, this node must be destroyed
-//       $(branch).remove()
-//     }
-//
-//   });
-// }
-
-// function eachStatements({setup, db, $, instance}){
-//   // Locate all control statements.
-//   $('*[each]')
-//   .filter(o=>!$(this).parent().is("*[if]")) // those need to run first
-//   .filter(o=>!$(this).parent().is(Object.keys(instance.template).join(", "))) // avoid executing statements in templates
-//
-//   .each(function(i, branch) {
-//     const path = $(branch).attr('each');
-//
-//
-//
-//     // $(branch).before(`<!-- eval loping ${path} to ${dereferenced} (keys were ${Object.keys(setup).join(", ")}) -->`)
-//     for(let item of dereferenced){
-//
-//       const context = {...item, index}; // TODO: allow alternate naming of index
-//       const interpolated = interpolate(html, context);
-//       const $2 = cheerio.load(interpolated);
-//       const setup2 = Object.assign({}, setup, context);
-//
-//         // $(branch).before(`<!-- eval evaluating body! keys are ${Object.keys(setup2).join(", ")}) -->`)
-//         ifStatements({setup:setup2, db, $:$2, instance});
-//         eachStatements({setup:setup2, db, $:$2, instance});
-//         templateInterpolation({setup:setup2, db, $:$2, instance});
-//         helperExecution({setup:setup2, db, $:$2, instance});
-//
-//       $(branch).before($2.html());
-//       index++;
-//     }
-//     $(branch).remove()
-//   });
-// }
-
-// function templateInterpolation({setup, db, $, instance}){
-//   for(let name in instance.template){
-//     $(name).each(function(i, branch) {
-//
-//       const html = instance.template[name];
-//       const interpolated = interpolate(html, setup)
-//
-//       const $2 = cheerio.load(interpolated);
-//
-//         ifStatements({setup, db, $:$2, instance});
-//         eachStatements({setup, db, $:$2, instance});
-//         templateInterpolation({setup, db, $:$2, instance});
-//         helperExecution({setup, db, $:$2, instance});
-//
-//       $(branch).replaceWith($2.html());
-//
-//     });
-//   }
-// }
-//
-// function helperExecution({setup, db, $, instance}){
-//   $('*[helper]').each(function(i, branch) {
-//     const id = $(branch).attr('helper');
-//     $(branch).attr('helper', null);
-//     const val = db.helper[id].function(setup);
-//     $(branch).html(val);
-//   });
-//
-//   $('helper[name]').each(function(i, branch) {
-//     const id = $(branch).attr('name');
-//     const val = db.helper[id].function(setup);
-//     $(branch).replaceWith(val);
-//   });
-// }
+}
