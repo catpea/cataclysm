@@ -52,11 +52,25 @@ function traverse(root, {template, context, page, db, $}){
   //.filter((index, branch) => branch.nodeType == 1) // select standard nodes only
   .each(function (index, branch) {
 
+    // before we go any ruther, we must interpolate all attributes
+    if( branch.nodeType === 1 ){
+      // we must interpolate all attributes
+      let attribs = Object.keys( branch.attribs );
+      for(let attrib of attribs){
+        $(branch).attr(attrib, interpolate($(branch).attr(attrib), context) )
+      }
+    }
 
+    // before we go any ruther, we must interpolate text node text
     if( branch.nodeType === 3 ){
       const text = $.html(branch);
       $(branch).replaceWith( interpolate(text, context) );
     }
+
+
+
+
+    // now prepare for various special cases
 
     const state = {};
     state.execute = 'nominal';
@@ -135,12 +149,8 @@ function traverse(root, {template, context, page, db, $}){
       }
 
       $(branch).before(`<!-- if path "${path}" is:(${state.is}) not:(${state.not}) resulted in outcome=(${outcome}) returned "${dereferenced}" (keys were ${Object.keys(context).join(", ")}) -->`);
-      if(outcome){
 
-        // traverse prior to interpolation
-        // const html = $.html(branch) + '\n'; // get string for interpolation
-        //const interpolated = html;
-        // //const interpolated = interpolate(html, context);
+      if(outcome){
         const $new = load(html);
         traverse($new.root(), {template, context, page, db, $:$new});
         $(branch).replaceWith($new.html());
@@ -169,8 +179,7 @@ function traverse(root, {template, context, page, db, $}){
       if(dereferenced){
         for(let item of dereferenced){
           const newContext = Object.assign({}, context, item, {index});
-          const interpolated = interpolate(html, newContext);
-          const $new = load(interpolated);
+          const $new = load(html);
           traverse($new.root(), {template, context:newContext, page, db, $:$new});
 
           $(branch).before($new.html());
@@ -182,29 +191,27 @@ function traverse(root, {template, context, page, db, $}){
     } else if(state.execute == 'template'){
       const name = branch.name;
       const html = template[name];
-      const content = $.html(branch);
-      const interpolated = html;
-      //TODO: when to do interpolation here?
-      //const interpolated = interpolate(html, context);
-      const $new = load(interpolated);
+      const branchContent = $.html(branch);
+      const $new = load(html);
+
       $(branch).before(`<!-- template ${name} is mounted here here (keys were ${Object.keys(context).join(", ")}) -->`);
 
       // TODO: check slot names in immediate nodes only
       $new('slot[name]').each(function (index, templateSlot) {
         const slotName = $(templateSlot).attr('name');
-        const $content = load(content);
+        const $branchContent = load(branchContent);
         // comes from the body of the call to a template
-        const selection = $content(`*[slot='${slotName}']`).html();
-        const existingContent = $(templateSlot).html();
-        $(selection).attr('slot', null)
-        $new(templateSlot).replaceWith( selection||existingContent )
+        const branchContentSelection = $branchContent(`*[slot='${slotName}']`).html(); // user wants this assigned to a slot
+        $(branchContentSelection).attr('slot', null)
+        const templateSlotDefaultContent = $(templateSlot).html(); // template creator set default content for this slot
+        $new(templateSlot).replaceWith( branchContentSelection||templateSlotDefaultContent )
       });
       traverse($new.root(), {template, context, page, db, $:$new}); // once slots have been done traverse the shadow root
 
 
       // ADD INTERPOLATION HERE!?
       $(branch).replaceWith($new.html()); // and add the shadowroot back
-      interpolateHtml($, branch, context)
+      //interpolateHtml($, branch, context)
 
     }else{
       traverse(branch, {template, context, page, db, $});
