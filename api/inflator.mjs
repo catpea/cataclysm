@@ -18,6 +18,7 @@ async function main(setup, files){
   await helpers(setup, files.filter(item=>item.type == 'helper'));
   await plugins(setup, files.filter(item=>item.type == 'plugin'));
   await pages(setup, files.filter(item=>item.type == 'page'));
+  await posts(setup, files.filter(item=>item.type == 'post'));
 
 
 }
@@ -42,7 +43,7 @@ async function plugins(setup, files){
     const imported = await import(item.location);
     item.function = imported.default;
   }
-  //console.log(files);
+  console.log(`Plugins (${files.length}): ${files.map(i=>i.name)}`);
 }
 
 async function pages(setup, files){
@@ -50,4 +51,11 @@ async function pages(setup, files){
     item.content = fs.readFileSync(item.location).toString();
   }
   console.log(`Pages (${files.length}): ${files.map(i=>`${i.name} (${humanize.filesize(i.content.length)})`)}`);
+}
+
+async function posts(setup, files){
+  for(let item of files){
+    item.content = fs.readFileSync(item.location).toString();
+  }
+  console.log(`Posts (${files.length}): ${files.map(i=>`${i.name} (${humanize.filesize(i.content.length)})`)}`);
 }

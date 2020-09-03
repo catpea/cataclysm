@@ -20,30 +20,105 @@ async function main(setup, files){
 
   const db = database(setup, files);
 
+  // if(0){
+  //   for(let page of db.pages){
+  //     const $ = load(page.content);
+  //     const instance = {
+  //       template: db.partials.reduce((root,item)=>{ root[item.name] = item.content; return root; }, {}), // the template database is seeded with partials, extended within each page by <template/>s.
+  //       context: Object.assign({}, setup, {page:{ id: page.name, file: page.name + '.html' }} ),
+  //       db,
+  //       $
+  //     };
+  //     // This should happen once, because templates are stripped off asap, to be used later on.
+  //     templator(instance);
+  //     traverse($('html'), instance);
+  //     page.html = $.html();
+  //     page.html = pretty(page.html)
+  //
+  //     const destination = path.join(setup.locations.destination, page.name + '.html')
+  //     fs.writeFileSync(destination, page.html);
+  //     console.log(`INFO: saved ${destination} (${humanize.filesize(page.html.length)})`);
+  //
+  //   }
+  // }
 
 
-  for(let page of db.pages){
-    const $ = load(page.content);
+  if(1){
+    for(let plugin of db.plugins){
 
-    const instance = {
-      template: db.partials.reduce((root,item)=>{ root[item.name] = item.content; return root; }, {}), // the template database is seeded with partials, extended within each page by <template/>s.
-      context: Object.assign({}, setup, {page:{ id: page.name, file: page.name + '.html' }} ),
-      db,
-      $
-    };
+      const list = await plugin.function({setup, plugin})
 
-    // This should happen once, because templates are stripped off asap, to be used later on.
-    templator(instance);
-    traverse($('html'), instance);
-
-
-    page.html = $.html();
-    page.html = pretty(page.html)
-    save(setup, page)
-
+      for(let entry of list){
+        const template = fs.readFileSync( path.join(plugin.dirname, entry.template) )
+        const $ = load(template);
+        const instance = {
+          template: db.partials.reduce((root,item)=>{ root[item.name] = item.content; return root; }, {}), // the template database is seeded with partials, extended within each page by <template/>s.
+          context: Object.assign({}, setup, {content:entry.content}, {page:{ id: entry.name, file: entry.name + '.html' }} ),
+          db,
+          $
+        };
+        templator(instance);
+        traverse($('html'), instance);
+        let html = $.html();
+        html = pretty(html);
+        const destination = path.join(setup.locations.destination, instance.context.page.file)
+        // fs.writeFileSync(destination, html);
+        console.log(`INFO: saved ${destination} (${humanize.filesize(html.length)})`);
+      }
+    }
   }
 
+  // if(0){
+  //   for(let post of db.posts){
+  //     console.log(post.content);
+  //     const $ = load(post.content);
+  //     const source = $('html').attr('source');
+  //     const file = $('html').attr('file');
+  //     $('html').attr('source', null);
+  //     $('html').attr('file', null);
+  //     const dereferenced = dereference(setup, source);
+  //     // console.log(dereferenced);
+  //     if(dereferenced){
+  //       for(let entry of dereferenced){
+  //         const $ = load(post.content);
+  //         const context = Object.assign( {}, setup, {content:entry} );
+  //         const fileName = interpolate(file, context);
+  //         $('html').attr('template', post.location);
+  //         console.log(`Processing: ${fileName} based on ${source}`);
+  //         console.log(`${Object.keys(context).join(", ")}`);
+  //         const instance = {
+  //           template: db.partials.reduce((root,item)=>{ root[item.name] = item.content; return root; }, {}), // the template database is seeded with partials, extended within each page by <template/>s.
+  //           context: Object.assign(context, {page:{ id: post.name, file: fileName }}),
+  //           db,
+  //           $
+  //         };
+  //         templator(instance);
+  //         traverse($('html'), instance);
+  //         post.html = $.html();
+  //         post.html = pretty(post.html)
+  //         const destination = path.join(setup.locations.destination, fileName)
+  //         fs.writeFileSync(destination, post.html);
+  //         console.log(`INFO: saved ${destination} (${humanize.filesize(post.html.length)})`);
+  //       }
+  //     }
+  //   }
+  // }
+
+
+
+
+
 }
+
+
+
+
+
+
+
+
+
+
 
 function traverse(root, {template, context, page, db, $}){
   // $(root).addClass('traversed');
@@ -51,6 +126,8 @@ function traverse(root, {template, context, page, db, $}){
   .contents() // Gets the branches of each branch in the set of matched branchs, including text and comment nodes.
   //.filter((index, branch) => branch.nodeType == 1) // select standard nodes only
   .each(function (index, branch) {
+
+
 
     // before we go any ruther, we must interpolate all attributes
     if( branch.nodeType === 1 ){
@@ -114,6 +191,10 @@ function traverse(root, {template, context, page, db, $}){
       $(branch).attr('path', null);
       state.removeBranch = function(){ $(branch).remove(); }
 
+    } else if(branch.name == 'function'){
+      state.execute = 'function';
+      state.name = $(branch).attr('name');
+
     }else if( Object.keys(template).includes(branch.name) ){
       state.execute = 'template';
     }
@@ -161,6 +242,7 @@ function traverse(root, {template, context, page, db, $}){
       }
 
     } else if(state.execute == 'each'){
+
       const path = state.path;
       const html = state.html;
       let dereferenced = dereference(context, path);
@@ -181,14 +263,20 @@ function traverse(root, {template, context, page, db, $}){
           const newContext = Object.assign({}, context, item, {index});
           const $new = load(html);
           traverse($new.root(), {template, context:newContext, page, db, $:$new});
-
           $(branch).before($new.html());
           index++;
         }
       }
       state.removeBranch()
 
+    } else if(state.execute == 'function'){
+      const response = db.helper[state.name].function(context);
+      const $new = load(response);
+      traverse($new.root(), {template, context, page, db, $:$new});
+      $(branch).replaceWith($new.html());
+
     } else if(state.execute == 'template'){
+
       const name = branch.name;
       const html = template[name];
       const branchContent = $.html(branch);
@@ -220,6 +308,17 @@ function traverse(root, {template, context, page, db, $}){
   }) // cheerio each
 }
 
+
+
+
+
+
+
+
+
+
+
+
 function database(setup, files){
 
   const db = {};
@@ -228,12 +327,14 @@ function database(setup, files){
   db.helpers = files.filter(item=>item.type == 'helper');
   db.plugins = files.filter(item=>item.type == 'plugin');
   db.pages = files.filter(item=>item.type == 'page');
+  db.posts = files.filter(item=>item.type == 'post');
 
   // Name Lookup
   db.partials.reduce((root,item)=>{ if(!root.partial) root.partial = {}; root.partial[item.name] = item; return root; }, db);
   db.helpers.reduce((root,item)=>{ if(!root.helper) root.helper = {}; root.helper[item.name] = item; return root; }, db);
   db.plugins.reduce((root,item)=>{ if(!root.plugin) root.plugin = {}; root.plugin[item.name] = item; return root; }, db);
   db.pages.reduce((root,item)=>{ if(!root.page) root.page = {}; root.page[item.name] = item; return root; }, db);
+  db.posts.reduce((root,item)=>{ if(!root.post) root.post = {}; root.post[item.name] = item; return root; }, db);
 
 
 
@@ -304,16 +405,6 @@ function interpolateHtml($, node, context){
 
 
 
-
-function save(setup, page){
-    const destination = path.join(setup.locations.destination, page.name + '2' + '.html')
-
-    let html = page.html;
-    //html = cheerio.load(html).html();
-    fs.writeFileSync(destination, html);
-
-    console.log(`INFO: saved ${destination} (${humanize.filesize(page.html.length)})`);
-}
 
 
 

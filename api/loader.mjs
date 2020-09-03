@@ -12,8 +12,9 @@ async function main(setup){
   .concat(shallow('helper', setup.locations.templateHelpers, '.mjs'))
   .concat(shallow('helper', setup.locations.templateRootHelpers, '.mjs'))
   .concat(intense('partial', setup.locations.templateRootPartials, '.html'))
-  .concat(shallow('plugin', setup.locations.templateRootPlugins, '.mjs'))
-  .concat(intense('page', setup.locations.templateRootPages, '.html'))
+  .concat(modular('plugin', setup.locations.templateRootPlugins, '.mjs'))
+  .concat(shallow('page', setup.locations.templateRootPages, '.html'))
+  .concat(shallow('post', setup.locations.templateRootPosts, '.html'))
   return files;
 }
 
@@ -26,6 +27,25 @@ function intense(type, location, extension){
       filename,
       type,
       name: kebabCase(path.join(path.dirname(path.relative(location, base)), path.basename(filename, extension))),
+      basename: path.dirname( path.relative(location, base) ),
+      dirname:  path.dirname(base),
+      location:base
+    }))
+    .forEach(item=>response.push(item))
+  }
+  return response;
+}
+
+function modular(type, location, extension){
+  const response = [];
+  if(fs.pathExistsSync(location)){
+    const items = fsWalk.walkSync(location)
+    .filter(o=>o.name.endsWith(extension))
+    .map(({name:filename, path:base})=>({
+      filename,
+      type,
+      name: camelCase(path.join(path.dirname(path.relative(location, base)))),
+      dirname:  path.dirname(base),
       location:base
     }))
     .forEach(item=>response.push(item))
