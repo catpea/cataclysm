@@ -49,6 +49,7 @@ async function main(){
   setup.locations.templateHelpers = path.join(setup.locations.root, 'src/templates/helpers');
   setup.locations.templateRoot = path.join(setup.locations.root, path.join('src/templates/', setup.options.template));
   setup.locations.templateRootHelpers = path.join(setup.locations.templateRoot, 'helpers');
+  setup.locations.templateRootTransformers = path.join(setup.locations.templateRoot, 'transformers');
   setup.locations.templateRootPartials = path.join(setup.locations.templateRoot, 'partials');
   setup.locations.templateRootPages = path.join(setup.locations.templateRoot, 'pages');
   setup.locations.templateRootPosts = path.join(setup.locations.templateRoot, 'posts');

@@ -11,6 +11,7 @@ async function main(setup){
   const files = []
   .concat(shallow('helper', setup.locations.templateHelpers, '.mjs'))
   .concat(shallow('helper', setup.locations.templateRootHelpers, '.mjs'))
+  .concat(shallow('transformer', setup.locations.templateRootTransformers, '.mjs'))
   .concat(intense('partial', setup.locations.templateRootPartials, '.html'))
   .concat(modular('plugin', setup.locations.templateRootPlugins, '.mjs'))
   .concat(shallow('page', setup.locations.templateRootPages, '.html'))
@@ -44,10 +45,11 @@ function modular(type, location, extension){
     .map(({name:filename, path:base})=>({
       filename,
       type,
-      name: camelCase(path.join(path.dirname(path.relative(location, base)))),
+      name: path.join(path.dirname(path.relative(location, base))),
       dirname:  path.dirname(base),
       location:base
     }))
+    .filter(o=>!o.name.startsWith('_'))
     .forEach(item=>response.push(item))
   }
   return response;

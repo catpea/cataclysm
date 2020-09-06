@@ -16,6 +16,7 @@ async function main(setup, files){
 
   await partials(setup, files.filter(item=>item.type == 'partial'));
   await helpers(setup, files.filter(item=>item.type == 'helper'));
+  await transformers(setup, files.filter(item=>item.type == 'transformer'));
   await plugins(setup, files.filter(item=>item.type == 'plugin'));
   await pages(setup, files.filter(item=>item.type == 'page'));
   await posts(setup, files.filter(item=>item.type == 'post'));
@@ -36,6 +37,13 @@ async function helpers(setup, files){
     item.function = imported.default;
   }
   console.log(`Helpers (${files.length}): ${files.map(i=>i.name)}`);
+}
+async function transformers(setup, files){
+  for(let item of files){
+    const imported = await import(item.location);
+    item.function = imported.default;
+  }
+  console.log(`Transformers (${files.length}): ${files.map(i=>i.name)}`);
 }
 
 async function plugins(setup, files){

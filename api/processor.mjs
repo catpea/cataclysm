@@ -7,13 +7,16 @@ import humanize from 'humanize';
 import camelCase from 'lodash/camelCase.js';
 import at from 'lodash/at.js';
 import flatten from 'lodash/flatten.js';
+import clone from 'lodash/clone.js';
 import fsWalk from '@nodelib/fs.walk';
 
 export default main;
 
 function load(html){
+
   const $ = cheerio.load(html);
   return $;
+
 }
 
 async function main(setup, files){
@@ -44,25 +47,104 @@ async function main(setup, files){
 
 
   if(1){
+
+    const urls = {};
+
     for(let plugin of db.plugins){
 
       const list = await plugin.function({setup, plugin})
 
       for(let entry of list){
-        const template = fs.readFileSync( path.join(plugin.dirname, entry.template) )
+        const template = fs.readFileSync( path.join(plugin.dirname, entry.template) ).toString();
+        // console.log(template);
+
         const $ = load(template);
+
         const instance = {
           template: db.partials.reduce((root,item)=>{ root[item.name] = item.content; return root; }, {}), // the template database is seeded with partials, extended within each page by <template/>s.
-          context: Object.assign({}, setup, {content:entry.content}, {page:{ id: entry.name, file: entry.name + '.html' }} ),
+          context: Object.assign({}, setup, {content:entry.content}, {parent:entry.parent}, {page:{ id: entry.name, file: entry.name + '.html' }} ),
           db,
           $
         };
         templator(instance);
+
         traverse($('html'), instance);
+
+        // $('surogate').children().each(function(i,e){
+        //   $('head').append(e)
+        // })
+        // $('surogate').remove();
+
+        $('*').contents().each(function() {
+            if(this.nodeType === 8) {
+                $(this).remove();
+            }
+        });
+
+        $('img').each(function(i,e) {
+          let location = path.join(setup.locations.destination, $(this).attr('src'));
+          if(!fs.pathExistsSync(location)){
+            console.log('MISSING IMAGE: ', location, $.html(e));
+          }
+
+        });
+
+        $('a').each(function(i,e) {
+          let location = $(this).attr('href');
+
+          if(location.match(/^https{0,1}:\/\//)){
+            if(!urls[location]){
+              urls[location] = {
+              count:1,
+              };
+              //console.log('EXTERNAL LINK: %s (%s)', location, instance.context.page.file);
+            }
+            urls[location].count++;
+          }else if(location.match(/^#/)){
+            if(!urls[location]){
+              urls[location] = {
+              count:1,
+              };
+              //console.log('INTERNAL ANCHOR LINK: %s (%s)', location, instance.context.page.file);
+            }
+            urls[location].count++;
+
+
+
+            if($(`*[name="${location.substr(1)}"]`).length == 0){
+                console.log('BAD INTERNAL ANCHOR %s not found: ', location, $.html(e));
+            }
+
+
+
+
+          }else{
+
+
+            if(!urls[location]){
+              urls[location] = {
+              count:1,
+              };
+              //console.log('INTERNAL LINK: %s (%s)', location, instance.context.page.file);
+            }
+            urls[location].count++;
+
+            let target = path.join(setup.locations.destination, location);
+            if(!fs.pathExistsSync(target)){
+              console.log('BAD LINK TO MISSING FILE:', location, $.html(e));
+            }
+
+          }
+
+
+
+        });
+
         let html = $.html();
-        html = pretty(html);
+        html = pretty(html, {ocd: true});
+
         const destination = path.join(setup.locations.destination, instance.context.page.file)
-        // fs.writeFileSync(destination, html);
+        fs.writeFileSync(destination, html);
         console.log(`INFO: saved ${destination} (${humanize.filesize(html.length)})`);
       }
     }
@@ -121,6 +203,7 @@ async function main(setup, files){
 
 
 function traverse(root, {template, context, page, db, $}){
+  templator({template, context, page, db, $});
   // $(root).addClass('traversed');
   $(root)
   .contents() // Gets the branches of each branch in the set of matched branchs, including text and comment nodes.
@@ -130,7 +213,7 @@ function traverse(root, {template, context, page, db, $}){
 
 
     // before we go any ruther, we must interpolate all attributes
-    if( branch.nodeType === 1 ){
+    if( branch.nodeType === 1 && branch.attribs){
       // we must interpolate all attributes
       let attribs = Object.keys( branch.attribs );
       for(let attrib of attribs){
@@ -176,28 +259,62 @@ function traverse(root, {template, context, page, db, $}){
       $(branch).attr('not', null);
       state.html = $(branch).html() + '\n'; // contents only because this is a node we want to get rid of.
 
+
+
+
+
     } else if($(branch).attr('each')){
       state.execute = 'each';
       state.path = $(branch).attr('each');
       $(branch).attr('each', null);
-      state.html = $.html(branch) + '\n'; // everything including parent because this is an attribute
-      state.removeBranch = function(){ $(branch).remove(); }
+
 
     } else if(branch.name == 'each'){
       state.execute = 'each';
       state.path = $(branch).attr('path');
-      state.html = $(branch).html() + '\n'; // contents only because this is a node we want to get rid of.
+      state.mode = 'tag';
       //console.log('found each', Object.keys(context).join(", "), state.html);
       $(branch).attr('path', null);
-      state.removeBranch = function(){ $(branch).remove(); }
+
+
+
+
+
+    } else if($(branch).attr('with')){
+      state.execute = 'with';
+      state.path = $(branch).attr('with');
+      $(branch).attr('with', null);
+      state.html = $.html(branch) + '\n'; // everything including parent because this is an attribute
+
+    } else if(branch.name == 'with'){
+      state.execute = 'with';
+      state.mode = 'tag';
+      state.path = $(branch).attr('path');
+      state.html = $(branch).html() + '\n'; // contents only because this is a node we want to get rid of.
+      //console.log('found with', Object.keys(context).join(", "), state.html);
+      $(branch).attr('path', null);
+
+
+    } else if($(branch).attr('template')){
+      // NOTE: bug in cheerio prevented use of custom elements in head, template attribute was created to address that.
+      state.execute = 'template';
+      state.name = $(branch).attr('template')
+      $(branch).attr('template', null);
+      state.html = template[state.name];
+      state.content = ""; // attributes have no content, a pointer could be added here, maybe.
+
+    } else if(Object.keys(template).includes(branch.name)){
+      state.execute = 'template';
+      state.name = branch.name;
+      state.mode = 'tag';
+      state.html = template[state.name];
+      state.content = $.html(branch);
 
     } else if(branch.name == 'function'){
       state.execute = 'function';
       state.name = $(branch).attr('name');
-
-    }else if( Object.keys(template).includes(branch.name) ){
-      state.execute = 'template';
     }
+
 
 
 
@@ -221,6 +338,12 @@ function traverse(root, {template, context, page, db, $}){
       //console.log( context.id );
       let outcome = undefined;
 
+      if(state.is === 'true') state.is = true;
+      if(state.is === 'false') state.is = false;
+      if(state.not === 'true') state.not = true;
+      if(state.not === 'false') state.not = false;
+
+
       if(state.is !== undefined){
         outcome = ( dereferenced == state.is)
       } else if (state.not !== undefined) {
@@ -241,11 +364,49 @@ function traverse(root, {template, context, page, db, $}){
         // nothing to traverse, the node is gone now
       }
 
+    } else if(state.execute == 'with'){
+        const path = state.path;
+        const html = state.html;
+        const dereferenced = dereference(context, path);
+
+        $(branch).before(`<!-- WITH path "${path}" "${dereferenced}" (keys were ${Object.keys(context).join(", ")}) -->`);
+
+        const newContext = Object.assign({}, context, dereferenced);
+        const $new = load(html);
+        traverse($new.root(), {template, context:newContext, page, db, $:$new});
+
+        if(state.mode === 'tag'){
+          $(branch).replaceWith($new.html());
+        }else{
+          $(branch).after($new.html())
+          $(branch).remove();
+        }
+
+
+
     } else if(state.execute == 'each'){
 
       const path = state.path;
-      const html = state.html;
+      let html;
+
+
       let dereferenced = dereference(context, path);
+
+      // TRANSFORM
+      const transformers = decodeTransform($(branch).attr('transform'));
+      $(branch).attr('transform', null);
+      if(transformers){
+        if(dereferenced){
+          for(let transform of transformers){
+            if(db.transformer[transform]){
+              dereferenced = db.transformer[transform].function(dereferenced);
+            }else{
+              throw new Error('Unknown transformer');
+            }
+          }
+        }
+      }
+
       // SLICE
       const slice = decodeSlice($(branch).attr('slice'));
       $(branch).attr('slice', null);
@@ -254,6 +415,17 @@ function traverse(root, {template, context, page, db, $}){
           dereferenced = dereferenced.slice(...slice);
         }
       }
+
+      // html extraction must come after slice/transformation.
+      if(state.mode === 'tag'){
+
+        $(branch).attr('class', null);
+        html = $(branch).html() + '\n'; // contents only because this is a node we want to get rid of.
+      }else{
+        html = $.html(branch) + '\n'; // everything including parent because this is an attribute
+      }
+
+
       //$(branch).before(`<!-- EACH: address://${address($, branch)} -->`);
       $(branch).before(`<!-- EACH path "${path}" returned "${dereferenced}" (keys were ${Object.keys(context).join(", ")}) -->`);
       // ITERATION
@@ -262,12 +434,17 @@ function traverse(root, {template, context, page, db, $}){
         for(let item of dereferenced){
           const newContext = Object.assign({}, context, item, {index});
           const $new = load(html);
+
+
+
           traverse($new.root(), {template, context:newContext, page, db, $:$new});
           $(branch).before($new.html());
           index++;
         }
       }
-      state.removeBranch()
+
+      $(branch).remove();
+
 
     } else if(state.execute == 'function'){
       const response = db.helper[state.name].function(context);
@@ -275,31 +452,66 @@ function traverse(root, {template, context, page, db, $}){
       traverse($new.root(), {template, context, page, db, $:$new});
       $(branch).replaceWith($new.html());
 
+
+
+
+
     } else if(state.execute == 'template'){
 
-      const name = branch.name;
-      const html = template[name];
-      const branchContent = $.html(branch);
-      const $new = load(html);
+      const name = state.name;
+      const html = state.html;
+      const branchContent = state.content;
+      const $templateDOM = load(html);
+      //console.log('HTML for %s is', 1, name, html);
+    //  console.log( '>>>>>>>>>>>>>>>>>>>>>>>>>>' );
 
+      $(branch).before(`<!-- EACH: address://${address($, branch)} -->`);
       $(branch).before(`<!-- template ${name} is mounted here here (keys were ${Object.keys(context).join(", ")}) -->`);
 
       // TODO: check slot names in immediate nodes only
-      $new('slot[name]').each(function (index, templateSlot) {
+      $templateDOM('slot[name]').each(function (index, templateSlot) {
         const slotName = $(templateSlot).attr('name');
         const $branchContent = load(branchContent);
         // comes from the body of the call to a template
         const branchContentSelection = $branchContent(`*[slot='${slotName}']`).html(); // user wants this assigned to a slot
         $(branchContentSelection).attr('slot', null)
         const templateSlotDefaultContent = $(templateSlot).html(); // template creator set default content for this slot
-        $new(templateSlot).replaceWith( branchContentSelection||templateSlotDefaultContent )
+        $templateDOM(templateSlot).replaceWith( branchContentSelection||templateSlotDefaultContent )
       });
-      traverse($new.root(), {template, context, page, db, $:$new}); // once slots have been done traverse the shadow root
+
+      // $templateDOM('*[slot]').each(function (index, templateSlot) {
+      //   const slotName = $(templateSlot).attr('slot');
+      //   $(templateSlot).attr('slot', null);
+      //   console.log('Attr encountered a slot set via attribute named %s', slotName);
+      //   const $branchContent = load(branchContent);
+      //   // comes from the body of the call to a template
+      //   const branchContentSelection = $branchContent(`*[slot='${slotName}']`).html(); // user wants this assigned to a slot
+      //   $(branchContentSelection).attr('slot', null)
+      //   if(branchContentSelection){
+      //     // replace whole tag
+      //     $templateDOM(templateSlot).replaceWith( branchContentSelection )
+      //   }else{
+      //     // do noting
+      //   }
+      // });
+
+
+      traverse($templateDOM.root(), {template, context, page, db, $:$templateDOM}); // once slots have been done traverse the shadow root
 
 
       // ADD INTERPOLATION HERE!?
-      $(branch).replaceWith($new.html()); // and add the shadowroot back
+      // $(branch).replaceWith($templateDOM.html()); // and add the shadowroot back
       //interpolateHtml($, branch, context)
+      if(state.mode === 'tag'){
+        $templateDOM('body > *').addClass($(branch).attr('class'))
+        $(branch).replaceWith($templateDOM.html()); // and add the shadowroot back
+      }else{
+        $(branch).append($templateDOM.html())
+      }
+
+
+
+
 
     }else{
       traverse(branch, {template, context, page, db, $});
@@ -322,10 +534,12 @@ function traverse(root, {template, context, page, db, $}){
 function database(setup, files){
 
   const db = {};
+
   // Lists
   db.partials = files.filter(item=>item.type == 'partial');
   db.helpers = files.filter(item=>item.type == 'helper');
   db.plugins = files.filter(item=>item.type == 'plugin');
+  db.transformers = files.filter(item=>item.type == 'transformer');
   db.pages = files.filter(item=>item.type == 'page');
   db.posts = files.filter(item=>item.type == 'post');
 
@@ -333,10 +547,9 @@ function database(setup, files){
   db.partials.reduce((root,item)=>{ if(!root.partial) root.partial = {}; root.partial[item.name] = item; return root; }, db);
   db.helpers.reduce((root,item)=>{ if(!root.helper) root.helper = {}; root.helper[item.name] = item; return root; }, db);
   db.plugins.reduce((root,item)=>{ if(!root.plugin) root.plugin = {}; root.plugin[item.name] = item; return root; }, db);
+  db.transformers.reduce((root,item)=>{ if(!root.transformer) root.transformer = {}; root.transformer[item.name] = item; return root; }, db);
   db.pages.reduce((root,item)=>{ if(!root.page) root.page = {}; root.page[item.name] = item; return root; }, db);
   db.posts.reduce((root,item)=>{ if(!root.post) root.post = {}; root.post[item.name] = item; return root; }, db);
-
-
 
   return db;
 }
@@ -412,6 +625,15 @@ function interpolateHtml($, node, context){
 
 
 
+
+function decodeTransform(str){
+  let response = null;
+  if(str){
+    response = str.split('|')
+    .map(i=>i.trim())
+  }
+  return response;
+}
 
 function decodeSlice(str){
   let response = null;
