@@ -39,8 +39,11 @@ function intense(type, location, extension){
 
 function modular(type, location, extension){
   const response = [];
+
   if(fs.pathExistsSync(location)){
-    const items = fsWalk.walkSync(location)
+    const items = fsWalk.walkSync(location);
+
+    items
     .filter(o=>o.name.endsWith(extension))
     .map(({name:filename, path:base})=>({
       filename,
@@ -52,6 +55,8 @@ function modular(type, location, extension){
     .filter(o=>!o.name.startsWith('_'))
     .forEach(item=>response.push(item))
   }
+  //console.log(response);
+  //process.exit(0)
   return response;
 }
 

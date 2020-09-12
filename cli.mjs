@@ -30,6 +30,12 @@ async function main(){
   };
 
   const options = await (await import(path.join(process.cwd(), 'cataclysm.mjs'))).default();
+
+  const template = yargs.argv.template||yargs.argv.t;
+  if(template){
+    options[template] = template;
+  }
+
   const data = await (await import(path.join(process.cwd(), 'src/data/index.mjs'))).default();
 
   const setup = Object.assign({
@@ -58,6 +64,7 @@ async function main(){
   setup.locations.templateFiles = path.join(setup.locations.templateRoot, 'files');
 
   const locations = yargs.argv.locations||yargs.argv.l;
+
   if(locations){
       if(typeof locations === 'boolean'){
         if(locations === true){

@@ -217,6 +217,7 @@ function traverse(root, {template, context, page, db, $}){
       // we must interpolate all attributes
       let attribs = Object.keys( branch.attribs );
       for(let attrib of attribs){
+        if(attrib === 'each') break;
         $(branch).attr(attrib, interpolate($(branch).attr(attrib), context) )
       }
     }
@@ -474,7 +475,12 @@ function traverse(root, {template, context, page, db, $}){
         const $branchContent = load(branchContent);
         // comes from the body of the call to a template
         const branchContentSelection = $branchContent(`*[slot='${slotName}']`).html(); // user wants this assigned to a slot
-        $(branchContentSelection).attr('slot', null)
+
+        // console.log(branchContentSelection);
+        // if(branchContentSelection) {
+        //   $(branchContentSelection).attr('slot', null);
+        // }
+
         const templateSlotDefaultContent = $(templateSlot).html(); // template creator set default content for this slot
         $templateDOM(templateSlot).replaceWith( branchContentSelection||templateSlotDefaultContent )
       });
